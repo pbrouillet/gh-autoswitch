@@ -134,3 +134,21 @@ jobs:
           files: artifacts/*
           generate_release_notes: true
           fail_on_unmatched_files: true
+
+  winget:
+    name: Submit to winget
+    needs: release
+    runs-on: windows-latest
+    # Only for real tag releases, and only when a WINGET_TOKEN secret is
+    # configured (a classic PAT with public_repo scope). Safe no-op otherwise.
+    if: github.ref_type == 'tag'
+    steps:
+      - name: Submit package update to winget-pkgs
+        if: ${{ secrets.WINGET_TOKEN != '' }}
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: pbrouillet.gh-autoswitch
+          # Only the Windows portable zips are winget installers.
+          installers-regex: '-pc-windows-msvc\.zip$'
+          token: ${{ secrets.WINGET_TOKEN }}
+

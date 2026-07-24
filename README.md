@@ -42,6 +42,20 @@ git fetch ─▶ git calls credential helper ─▶ gh-autoswitch
 
 ## Build & install
 
+Prebuilt archives for Windows, macOS, and Linux are attached to each
+[GitHub Release](https://github.com/pbrouillet/gh-autoswitch/releases).
+
+On Windows you can install via [winget](https://learn.microsoft.com/windows/package-manager/):
+
+```powershell
+winget install pbrouillet.gh-autoswitch
+```
+
+(See [`packaging/winget/README.md`](packaging/winget/README.md) for how the
+manifests are published.)
+
+To build from source:
+
 ```bash
 cargo build --release
 # binary: target/release/gh-autoswitch(.exe)
