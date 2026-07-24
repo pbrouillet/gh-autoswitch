@@ -132,7 +132,8 @@ impl App {
                 if let Some(m) = self.cfg.mappings.get(self.selected) {
                     self.form = Form::new(Some(self.selected), &m.host, &m.owner, &m.account);
                     self.mode = Mode::Edit;
-                    self.status = "Editing mapping — Tab to move, Enter to save, Esc to cancel.".into();
+                    self.status =
+                        "Editing mapping — Tab to move, Enter to save, Esc to cancel.".into();
                 } else {
                     self.status = "Nothing to edit.".into();
                 }

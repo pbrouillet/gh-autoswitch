@@ -35,13 +35,13 @@ impl Config {
         if !path.exists() {
             return Ok(Config::default());
         }
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
         if text.trim().is_empty() {
             return Ok(Config::default());
         }
-        let cfg: Config = serde_yaml::from_str(&text)
-            .with_context(|| format!("parsing {}", path.display()))?;
+        let cfg: Config =
+            serde_yaml::from_str(&text).with_context(|| format!("parsing {}", path.display()))?;
         Ok(cfg)
     }
 

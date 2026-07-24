@@ -81,9 +81,6 @@ mod tests {
     #[test]
     fn owner_is_first_segment() {
         let input = b"host=github.com\npath=org/sub/repo.git\n";
-        assert_eq!(
-            parse_owner(input).map(|(_, o)| o),
-            Some("org".to_string())
-        );
+        assert_eq!(parse_owner(input).map(|(_, o)| o), Some("org".to_string()));
     }
 }
