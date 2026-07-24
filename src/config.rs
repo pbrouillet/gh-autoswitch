@@ -12,13 +12,23 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gh_path: Option<String>,
 
+    /// Fallback account to switch to when no mapping matches the remote's
+    /// host/owner. Host-agnostic; omitted from the file when unset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_account: Option<String>,
+
     /// host/owner -> account mappings.
     #[serde(default)]
     pub mappings: Vec<Mapping>,
 }
 
-/// A single `host` + `owner` -> `account` mapping. `owner` may be `*` to act as
-/// a per-host default.
+/// A single `host` + `owner` -> `account` mapping.
+///
+/// `owner` is matched against the remote's first path segment and may be:
+/// * a literal org/user name (case-insensitive), or
+/// * `*` — a per-host catch-all default, or
+/// * a regular expression (e.g. `org1|org2|acme-.*`), matched fully and
+///   case-insensitively.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mapping {
     pub host: String,
@@ -59,23 +69,61 @@ impl Config {
         Ok(())
     }
 
-    /// Resolve the mapped account for a host/owner: an exact `host`+`owner`
-    /// match wins over a `host`+`*` wildcard. Returns `None` when nothing
-    /// matches (caller should leave the active account unchanged).
+    /// Resolve the mapped account for a host/owner.
+    ///
+    /// Precedence (deterministic, independent of file order):
+    /// 1. A literal `owner` that equals the remote owner (case-insensitive).
+    /// 2. A regex `owner` that fully matches the remote owner (case-insensitive,
+    ///    first match in file order).
+    /// 3. A `*` per-host catch-all.
+    /// 4. The global `default_account`.
+    ///
+    /// Returns `None` only when none of the above apply (caller leaves the
+    /// active account unchanged). Invalid regex patterns are skipped.
     pub fn lookup(&self, host: &str, owner: &str) -> Option<&str> {
+        // 1. Literal exact match wins over any pattern.
+        for m in &self.mappings {
+            if m.host.eq_ignore_ascii_case(host)
+                && is_literal_owner(&m.owner)
+                && m.owner.eq_ignore_ascii_case(owner)
+            {
+                return Some(m.account.as_str());
+            }
+        }
+        // 2. Regex match (first in file order), then 3. `*` catch-all.
         let mut wildcard: Option<&str> = None;
         for m in &self.mappings {
             if !m.host.eq_ignore_ascii_case(host) {
                 continue;
             }
-            if m.owner.eq_ignore_ascii_case(owner) {
+            if m.owner == "*" {
+                if wildcard.is_none() {
+                    wildcard = Some(m.account.as_str());
+                }
+            } else if !is_literal_owner(&m.owner) && owner_regex_matches(&m.owner, owner) {
                 return Some(m.account.as_str());
             }
-            if m.owner == "*" {
-                wildcard = Some(m.account.as_str());
-            }
         }
-        wildcard
+        // 3. per-host catch-all, else 4. global default.
+        wildcard.or(self.default_account.as_deref())
+    }
+}
+
+/// Whether an `owner` pattern is a plain literal (no regex metacharacters), and
+/// so should be compared by case-insensitive equality rather than as a regex.
+fn is_literal_owner(owner: &str) -> bool {
+    !owner.chars().any(|c| REGEX_META.contains(c))
+}
+
+const REGEX_META: &str = r".^$*+?()[]{}|\";
+
+/// Compile `owner` as a fully-anchored, case-insensitive regex and test it
+/// against `value`. Invalid patterns never match (they are skipped).
+fn owner_regex_matches(owner: &str, value: &str) -> bool {
+    let anchored = format!("(?i)^(?:{owner})$");
+    match regex::Regex::new(&anchored) {
+        Ok(re) => re.is_match(value),
+        Err(_) => false,
     }
 }
 
@@ -126,6 +174,7 @@ mod tests {
     fn sample() -> Config {
         Config {
             gh_path: None,
+            default_account: None,
             mappings: vec![
                 Mapping {
                     host: "github.com".into(),
@@ -184,5 +233,109 @@ mod tests {
         let c = Config::load_from(Path::new("/no/such/file.yml")).unwrap();
         assert!(c.mappings.is_empty());
         assert!(c.gh_path.is_none());
+    }
+
+    fn map(host: &str, owner: &str, account: &str) -> Mapping {
+        Mapping {
+            host: host.into(),
+            owner: owner.into(),
+            account: account.into(),
+        }
+    }
+
+    #[test]
+    fn regex_alternation_matches_either_org() {
+        let c = Config {
+            mappings: vec![map("github.com", "org1|org2", "shared")],
+            ..Default::default()
+        };
+        assert_eq!(c.lookup("github.com", "org1"), Some("shared"));
+        assert_eq!(c.lookup("github.com", "org2"), Some("shared"));
+        assert_eq!(c.lookup("github.com", "org3"), None);
+    }
+
+    #[test]
+    fn regex_wildcard_matches_prefix() {
+        let c = Config {
+            mappings: vec![map("github.com", "acme-.*", "acct")],
+            ..Default::default()
+        };
+        assert_eq!(c.lookup("github.com", "acme-foo"), Some("acct"));
+        assert_eq!(c.lookup("github.com", "acme-"), Some("acct"));
+        // Fully anchored: a leading segment that isn't `acme-` must not match.
+        assert_eq!(c.lookup("github.com", "notacme-foo"), None);
+    }
+
+    #[test]
+    fn regex_is_case_insensitive() {
+        let c = Config {
+            mappings: vec![map("github.com", "Acme-.*", "acct")],
+            ..Default::default()
+        };
+        assert_eq!(c.lookup("github.com", "ACME-Bar"), Some("acct"));
+    }
+
+    #[test]
+    fn literal_exact_wins_over_regex() {
+        // Order deliberately puts the regex first to prove precedence.
+        let c = Config {
+            mappings: vec![
+                map("github.com", "acme-.*", "regex_acct"),
+                map("github.com", "acme-team", "exact_acct"),
+            ],
+            ..Default::default()
+        };
+        assert_eq!(c.lookup("github.com", "acme-team"), Some("exact_acct"));
+        assert_eq!(c.lookup("github.com", "acme-other"), Some("regex_acct"));
+    }
+
+    #[test]
+    fn default_account_used_when_nothing_matches() {
+        let c = Config {
+            default_account: Some("fallback".into()),
+            mappings: vec![map("github.com", "acme-corp", "work")],
+            ..Default::default()
+        };
+        assert_eq!(c.lookup("github.com", "acme-corp"), Some("work"));
+        assert_eq!(c.lookup("github.com", "unknown-org"), Some("fallback"));
+        // Applies to unknown hosts too.
+        assert_eq!(c.lookup("ghe.example.com", "whatever"), Some("fallback"));
+    }
+
+    #[test]
+    fn wildcard_beats_default_account() {
+        let c = Config {
+            default_account: Some("fallback".into()),
+            mappings: vec![map("github.com", "*", "host_default")],
+            ..Default::default()
+        };
+        assert_eq!(c.lookup("github.com", "anything"), Some("host_default"));
+        assert_eq!(c.lookup("other.com", "anything"), Some("fallback"));
+    }
+
+    #[test]
+    fn invalid_regex_is_skipped_not_fatal() {
+        // `[` is an unterminated character class -> invalid regex.
+        let c = Config {
+            default_account: Some("fallback".into()),
+            mappings: vec![map("github.com", "acme[", "bad")],
+            ..Default::default()
+        };
+        assert_eq!(c.lookup("github.com", "acme["), Some("fallback"));
+        assert_eq!(c.lookup("github.com", "acme"), Some("fallback"));
+    }
+
+    #[test]
+    fn default_account_roundtrips_yaml() {
+        let dir = std::env::temp_dir().join(format!("ghas_cfg_def_{}", std::process::id()));
+        let path = dir.join("config.yml");
+        let c = Config {
+            default_account: Some("fallback".into()),
+            ..Default::default()
+        };
+        c.save_to(&path).unwrap();
+        let loaded = Config::load_from(&path).unwrap();
+        assert_eq!(loaded.default_account.as_deref(), Some("fallback"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

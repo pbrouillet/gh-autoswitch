@@ -76,9 +76,10 @@ gh-autoswitch          # or: gh-autoswitch tui
 ```
 
 - Table of `host / owner → account` mappings.
-- Keys: `↑/↓` select, `a` add, `e` edit, `d` delete, `g` **detect gh path**,
-  `s` save, `q` quit (prompts if unsaved).
-- The header shows the detected/​set `gh_path` and the config file location.
+- Keys: `↑/↓` select, `a` add, `e` edit, `d` delete, `D` **set default account**,
+  `g` **detect gh path**, `s` save, `q` quit (prompts if unsaved).
+- The header shows the detected/​set `gh_path`, the `default_account`, and the
+  config file location.
 
 ### Config file (YAML)
 
@@ -88,16 +89,28 @@ Location: `%APPDATA%\gh-autoswitch\config.yml` (Windows) /
 
 ```yaml
 gh_path: C:\Program Files\GitHub CLI\gh.exe   # inferred path to gh
+default_account: alice_personal               # fallback when nothing matches
 mappings:
   - host: github.com
-    owner: acme-corp     # exact owner wins over the wildcard
+    owner: acme-corp             # exact owner (case-insensitive)
     account: alice_work
   - host: github.com
-    owner: "*"           # per-host default
+    owner: "acme-.*|widgets-inc" # regex: several orgs share one account
+    account: alice_work
+  - host: github.com
+    owner: "*"                   # per-host default
     account: alice_personal
 ```
 
-If nothing matches, the active account is left unchanged (no-op).
+**`owner` matching.** Each mapping's `owner` may be an exact org/user name, a
+**regular expression** (matched fully and case-insensitively, e.g.
+`org1|org2` or `acme-.*`), or `*` for a per-host catch-all. Resolution
+precedence:
+
+1. exact name → 2. regex → 3. per-host `*` → 4. `default_account`.
+
+If none of these apply (no mapping and no `default_account`), the active account
+is left unchanged (no-op). Invalid regex patterns are skipped.
 
 ## Verify
 

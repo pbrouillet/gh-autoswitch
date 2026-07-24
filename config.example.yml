@@ -9,11 +9,25 @@
 # on `gh-autoswitch install`, or press `g` in the TUI to detect it.
 gh_path: C:\Program Files\GitHub CLI\gh.exe
 
-# host/owner -> account mappings. An exact host+owner match wins over a
-# host + "*" wildcard (per-host default). No match => active account unchanged.
+# Fallback account to switch to when no mapping below matches the remote's
+# host/owner (any host). Omit to leave the active account unchanged on no match.
+# Set it in the TUI with `D`.
+default_account: alice_personal
+
+# host/owner -> account mappings. `owner` may be:
+#   * an exact org/user name (case-insensitive),
+#   * a regular expression (e.g. "org1|org2" or "acme-.*"), matched fully and
+#     case-insensitively, or
+#   * "*" — a per-host catch-all default.
+#
+# Precedence: exact name > regex > per-host "*" > default_account.
 mappings:
   - host: github.com
     owner: acme-corp
+    account: alice_work
+  # One account shared by several orgs via a regex:
+  - host: github.com
+    owner: "acme-.*|widgets-inc|contoso"
     account: alice_work
   - host: github.com
     owner: alice

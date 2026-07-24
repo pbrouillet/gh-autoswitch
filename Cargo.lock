@@ -445,6 +445,7 @@ version = "1.0.0"
 dependencies = [
  "anyhow",
  "ratatui",
+ "regex",
  "serde",
  "serde_yaml",
 ]

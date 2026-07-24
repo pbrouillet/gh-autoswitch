@@ -17,6 +17,7 @@ use ratatui::Frame;
 enum Mode {
     List,
     Edit,
+    EditDefault,
     ConfirmQuit,
 }
 
@@ -43,6 +44,7 @@ struct App {
     list_state: ListState,
     mode: Mode,
     form: Form,
+    default_input: String,
     status: String,
     dirty: bool,
     quit: bool,
@@ -57,6 +59,7 @@ impl App {
             list_state: ListState::default(),
             mode: Mode::List,
             form: Form::new(None, "", "", ""),
+            default_input: String::new(),
             status: "Ready.".to_string(),
             dirty: false,
             quit: false,
@@ -104,6 +107,7 @@ impl App {
         match self.mode {
             Mode::List => self.on_key_list(code),
             Mode::Edit => self.on_key_edit(code),
+            Mode::EditDefault => self.on_key_default(code),
             Mode::ConfirmQuit => self.on_key_confirm(code),
         }
     }
@@ -145,6 +149,12 @@ impl App {
                 self.status = format!("Deleted {}/{}.", m.host, m.owner);
             }
             KeyCode::Char('g') => self.detect_gh(),
+            KeyCode::Char('D') => {
+                self.default_input = self.cfg.default_account.clone().unwrap_or_default();
+                self.mode = Mode::EditDefault;
+                self.status =
+                    "Default account — Enter to save, empty to clear, Esc to cancel.".into();
+            }
             KeyCode::Char('s') => self.save(),
             _ => {}
         }
@@ -178,7 +188,7 @@ impl App {
         let owner = self.form.fields[1].trim().to_string();
         let account = self.form.fields[2].trim().to_string();
         if host.is_empty() || owner.is_empty() || account.is_empty() {
-            self.status = "All fields are required (owner may be '*').".into();
+            self.status = "All fields are required (owner = name, regex, or '*').".into();
             return;
         }
         let mapping = Mapping {
@@ -199,6 +209,34 @@ impl App {
         self.dirty = true;
         self.mode = Mode::List;
         self.status = "Mapping saved (press 's' to write to disk).".into();
+    }
+
+    fn on_key_default(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => {
+                self.mode = Mode::List;
+                self.status = "Cancelled.".into();
+            }
+            KeyCode::Backspace => {
+                self.default_input.pop();
+            }
+            KeyCode::Enter => {
+                let value = self.default_input.trim().to_string();
+                if value.is_empty() {
+                    self.cfg.default_account = None;
+                    self.status = "Default account cleared (press 's' to write).".into();
+                } else {
+                    self.status = format!("Default account set to {value} (press 's' to write).");
+                    self.cfg.default_account = Some(value);
+                }
+                self.dirty = true;
+                self.mode = Mode::List;
+            }
+            KeyCode::Char(c) => {
+                self.default_input.push(c);
+            }
+            _ => {}
+        }
     }
 
     fn on_key_confirm(&mut self, code: KeyCode) {
@@ -252,7 +290,7 @@ fn ui(f: &mut Frame, app: &mut App) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(5),
+            Constraint::Length(6),
             Constraint::Min(3),
             Constraint::Length(4),
         ])
@@ -264,6 +302,8 @@ fn ui(f: &mut Frame, app: &mut App) {
 
     if app.mode == Mode::Edit {
         render_edit(f, app);
+    } else if app.mode == Mode::EditDefault {
+        render_default(f, app);
     } else if app.mode == Mode::ConfirmQuit {
         render_confirm(f);
     }
@@ -276,6 +316,11 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
         .clone()
         .unwrap_or_else(|| "(not set — press 'g' to detect)".to_string());
     let dirty = if app.dirty { "  [modified]" } else { "" };
+    let default = app
+        .cfg
+        .default_account
+        .clone()
+        .unwrap_or_else(|| "(none — press 'D' to set)".to_string());
     let lines = vec![
         Line::from(Span::styled(
             format!("gh-autoswitch — config editor{dirty}"),
@@ -284,6 +329,7 @@ fn render_header(f: &mut Frame, app: &App, area: Rect) {
                 .add_modifier(Modifier::BOLD),
         )),
         Line::from(format!("gh path : {gh}")),
+        Line::from(format!("default : {default}")),
         Line::from(format!("config  : {}", app.path.display())),
     ];
     let p = Paragraph::new(lines).block(Block::default().borders(Borders::ALL));
@@ -331,7 +377,7 @@ fn render_list(f: &mut Frame, app: &mut App, area: Rect) {
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
-    let keys = "[a]dd  [e]dit  [d]elete  [g] detect gh  [s]ave  [q]uit";
+    let keys = "[a]dd  [e]dit  [d]elete  [D] default  [g] detect gh  [s]ave  [q]uit";
     let lines = vec![
         Line::from(Span::styled(keys, Style::default().fg(Color::Yellow))),
         Line::from(Span::styled(
@@ -373,6 +419,10 @@ fn render_edit(f: &mut Frame, app: &App) {
         lines.push(Line::from(""));
     }
     lines.push(Line::from(Span::styled(
+        "  Owner: exact name, regex (org1|acme-.*), or * (per-host default)",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(Span::styled(
         "  Tab/↑↓ move   Enter save   Esc cancel",
         Style::default().fg(Color::DarkGray),
     )));
@@ -386,6 +436,40 @@ fn render_edit(f: &mut Frame, app: &App) {
         Block::default()
             .borders(Borders::ALL)
             .title(title)
+            .border_style(Style::default().fg(Color::Cyan)),
+    );
+    f.render_widget(p, area);
+}
+
+fn render_default(f: &mut Frame, app: &App) {
+    let area = centered_rect(64, 30, f.area());
+    f.render_widget(Clear, area);
+
+    let shown = format!("{}_", app.default_input);
+    let lines = vec![
+        Line::from(""),
+        Line::from("  Fallback account used when no mapping matches."),
+        Line::from(""),
+        Line::from(vec![
+            Span::raw("  Account : "),
+            Span::styled(
+                format!(" {shown} "),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Enter save   empty = clear   Esc cancel",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+    let p = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Default account ")
             .border_style(Style::default().fg(Color::Cyan)),
     );
     f.render_widget(p, area);
