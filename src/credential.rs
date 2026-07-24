@@ -15,8 +15,12 @@ pub fn run(op: &str) -> Result<i32> {
     let gh_bin = gh::resolve_gh(cfg.gh_path.as_deref());
 
     if op == "get" {
-        // Best-effort: never let switching block the git operation.
-        let _ = maybe_switch(&cfg, &gh_bin, &input);
+        // Best-effort: never let switching block the git operation, but do
+        // report failures on stderr so a mis-switch is diagnosable (git
+        // surfaces credential-helper stderr to the user).
+        if let Err(e) = maybe_switch(&cfg, &gh_bin, &input) {
+            eprintln!("gh-autoswitch: could not switch account: {e:#}");
+        }
     }
 
     gh::delegate_credential(&gh_bin, op, &input)

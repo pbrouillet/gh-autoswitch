@@ -65,10 +65,10 @@ impl Config {
     pub fn lookup(&self, host: &str, owner: &str) -> Option<&str> {
         let mut wildcard: Option<&str> = None;
         for m in &self.mappings {
-            if m.host != host {
+            if !m.host.eq_ignore_ascii_case(host) {
                 continue;
             }
-            if m.owner == owner {
+            if m.owner.eq_ignore_ascii_case(owner) {
                 return Some(m.account.as_str());
             }
             if m.owner == "*" {
@@ -157,6 +157,12 @@ mod tests {
     fn no_match_for_other_host() {
         let c = sample();
         assert_eq!(c.lookup("ghe.example.com", "acme-corp"), None);
+    }
+
+    #[test]
+    fn lookup_is_case_insensitive_for_host_and_owner() {
+        let c = sample();
+        assert_eq!(c.lookup("GitHub.com", "ACME-Corp"), Some("alice_work"));
     }
 
     #[test]

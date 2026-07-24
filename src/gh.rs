@@ -111,6 +111,38 @@ pub fn active_account(host: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// All accounts known to `gh` for a host, read offline from `hosts.yml`.
+pub fn known_accounts(host: &str) -> Vec<String> {
+    let text = match std::fs::read_to_string(hosts_file()) {
+        Ok(t) => t,
+        Err(_) => return Vec::new(),
+    };
+    let value: serde_yaml::Value = match serde_yaml::from_str(&text) {
+        Ok(v) => v,
+        Err(_) => return Vec::new(),
+    };
+    value
+        .get(host)
+        .and_then(|h| h.get("users"))
+        .and_then(|u| u.as_mapping())
+        .map(|m| {
+            m.keys()
+                .filter_map(|k| k.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Resolve a configured account name to the exact casing `gh` knows, matching
+/// case-insensitively. Falls back to the given name when no match is found so
+/// the caller still produces a meaningful error.
+pub fn canonical_account(host: &str, account: &str) -> String {
+    known_accounts(host)
+        .into_iter()
+        .find(|a| a.eq_ignore_ascii_case(account))
+        .unwrap_or_else(|| account.to_string())
+}
+
 /// Switch the active account for a host.
 pub fn switch(gh: &str, host: &str, account: &str) -> Result<()> {
     let status = Command::new(gh)
@@ -120,17 +152,26 @@ pub fn switch(gh: &str, host: &str, account: &str) -> Result<()> {
         .status()
         .with_context(|| format!("running `{gh} auth switch`"))?;
     if !status.success() {
-        anyhow::bail!("`gh auth switch` exited with {:?}", status.code());
+        anyhow::bail!(
+            "`gh auth switch --hostname {host} --user {account}` exited with {:?} \
+             (is that account logged in? run `gh auth status`)",
+            status.code()
+        );
     }
     Ok(())
 }
 
-/// Switch only when the desired account is not already active.
+/// Switch only when the desired account is not already active. The configured
+/// account name is resolved to `gh`'s canonical casing first.
 pub fn switch_if_needed(gh: &str, host: &str, account: &str) -> Result<()> {
-    if active_account(host).as_deref() == Some(account) {
+    let target = canonical_account(host, account);
+    if active_account(host)
+        .map(|a| a.eq_ignore_ascii_case(&target))
+        .unwrap_or(false)
+    {
         return Ok(());
     }
-    switch(gh, host, account)
+    switch(gh, host, &target)
 }
 
 /// Delegate a credential-helper operation to `gh auth git-credential <op>`,
