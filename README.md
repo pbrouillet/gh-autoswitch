@@ -1,8 +1,9 @@
 # gh-autoswitch
 
-Automatically run `gh auth switch` to select the right GitHub account **before
-every HTTPS git remote operation** (`push`, `pull`, `fetch`, `clone`, …) — based
-on the remote's owner/org.
+A single cross-platform **Rust** binary that automatically runs `gh auth switch`
+to select the right GitHub account **before every HTTPS git remote operation**
+(`push`, `pull`, `fetch`, `clone`, …), plus a **Ratatui TUI** to scaffold/edit
+the config and detect the path to `gh`.
 
 If you juggle multiple GitHub accounts (personal + work, or several enterprise
 hosts), the *active* `gh` account decides which token `gh` hands to git as a
@@ -17,7 +18,7 @@ can't cover every remote operation. Instead `gh-autoswitch` installs itself as a
 On each call it:
 
 1. Reads the credential request git sends on stdin (`protocol`, `host`, `path`).
-2. Derives the **owner/org** from the path and looks it up in your config file.
+2. Derives the **owner/org** from the path and looks it up in the YAML config.
 3. Runs `gh auth switch --hostname <host> --user <account>` — only if that
    account isn't already active (checked offline via gh's `hosts.yml`).
 4. Delegates to `gh auth git-credential`, so git still receives a valid token.
@@ -26,39 +27,32 @@ Owner-based mapping needs git to pass the repo path to the helper, so the
 installer also sets `credential.<host>.useHttpPath=true` (scoped to the host).
 
 ```
-git fetch ──▶ git calls credential helper ──▶ gh-autoswitch
-                                                 ├─ owner = "acme-corp"
-                                                 ├─ config: github.com/acme-corp = alice_work
-                                                 ├─ gh auth switch --user alice_work   (if needed)
-                                                 └─ gh auth git-credential get ──▶ token ──▶ git
+git fetch ─▶ git calls credential helper ─▶ gh-autoswitch
+                                              ├─ owner = "acme-corp"
+                                              ├─ config: github.com/acme-corp → alice_work
+                                              ├─ gh auth switch --user alice_work   (if needed)
+                                              └─ gh auth git-credential get ─▶ token ─▶ git
 ```
 
 ## Requirements
 
-- [`gh`](https://cli.github.com/) (GitHub CLI) with your accounts already logged
-  in (`gh auth login` for each).
+- [`gh`](https://cli.github.com/) with your accounts logged in (`gh auth login`).
 - `git`.
-- macOS/Linux: `bash` + `awk`. Windows: PowerShell (bundled) — the git
-  credential helper runs via `powershell`.
+- To build: a Rust toolchain (`cargo`).
 
-## Install
-
-Clone the repo, then run the installer for your platform.
-
-**macOS / Linux (bash):**
+## Build & install
 
 ```bash
-./install.sh                 # global, github.com
-./install.sh --host ghe.corp.example.com
-./install.sh --local         # only the current repo
+cargo build --release
+# binary: target/release/gh-autoswitch(.exe)
 ```
 
-**Windows (PowerShell):**
+Wire it up as git's credential helper (also infers & stores the path to `gh`):
 
-```powershell
-.\install.ps1                 # global, github.com
-.\install.ps1 --host ghe.corp.example.com
-.\install.ps1 --local
+```bash
+target/release/gh-autoswitch install            # global, github.com
+target/release/gh-autoswitch install --host ghe.corp.example.com
+target/release/gh-autoswitch install --local    # only the current repo
 ```
 
 This writes, for example:
@@ -66,84 +60,87 @@ This writes, for example:
 ```ini
 [credential "https://github.com"]
     helper =
-    helper = !"/path/to/bin/gh-autoswitch" git-credential
+    helper = !"/path/to/gh-autoswitch" git-credential
     useHttpPath = true
 ```
 
-(The empty `helper =` clears any inherited helpers so gh-autoswitch is
-authoritative for that host.)
+(The empty `helper =` clears any inherited helpers.) Put the binary on your
+`PATH` so you can just run `gh-autoswitch`.
 
-Optionally add `bin/` to your `PATH` so you can run `gh-autoswitch` directly.
+## Configure (TUI)
 
-## Configure
+Just run the binary with no arguments to open the editor:
 
-Create the config file mapping `host/owner` → gh account username:
-
-- Linux/macOS: `${XDG_CONFIG_HOME:-~/.config}/gh-autoswitch/config`
-- Windows: `%APPDATA%\gh-autoswitch\config`
-- or set `GH_AUTOSWITCH_CONFIG` to any path.
-
-```ini
-# Exact owner/org wins over the host wildcard
-github.com/acme-corp   = alice_work
-github.com/alice       = alice_personal
-github.com/*           = alice_personal      # per-host default
-
-ghe.corp.example.com/* = alice_corp
+```bash
+gh-autoswitch          # or: gh-autoswitch tui
 ```
 
-See [`config.example`](./config.example). If nothing matches, the active account
-is left unchanged (no-op).
+- Table of `host / owner → account` mappings.
+- Keys: `↑/↓` select, `a` add, `e` edit, `d` delete, `g` **detect gh path**,
+  `s` save, `q` quit (prompts if unsaved).
+- The header shows the detected/​set `gh_path` and the config file location.
+
+### Config file (YAML)
+
+Location: `%APPDATA%\gh-autoswitch\config.yml` (Windows) /
+`${XDG_CONFIG_HOME:-~/.config}/gh-autoswitch/config.yml`; override with
+`GH_AUTOSWITCH_CONFIG`. See [`config.example.yml`](./config.example.yml).
+
+```yaml
+gh_path: C:\Program Files\GitHub CLI\gh.exe   # inferred path to gh
+mappings:
+  - host: github.com
+    owner: acme-corp     # exact owner wins over the wildcard
+    account: alice_work
+  - host: github.com
+    owner: "*"           # per-host default
+    account: alice_personal
+```
+
+If nothing matches, the active account is left unchanged (no-op).
 
 ## Verify
 
 ```bash
-gh-autoswitch doctor            # or: bin/gh-autoswitch doctor
+gh-autoswitch doctor
 ```
 
-Shows the resolved config, the active account per host, and the effective git
-credential configuration. Then just `git fetch` / `git push` as usual.
+Shows the resolved config, mappings, the detected `gh` path, the active account
+per host, and the effective git credential configuration. Then just `git fetch`
+/ `git push` as usual.
 
 ## Uninstall
 
 ```bash
-./bin/gh-autoswitch uninstall             # bash
-.\bin\gh-autoswitch.ps1 uninstall         # PowerShell
+gh-autoswitch uninstall            # add --host / --local / --global to match
 ```
-
-Add `--host` / `--local` / `--global` to match how you installed.
 
 ## Commands
 
 | Command | Description |
 | --- | --- |
+| `tui` (default, no args) | Ratatui config editor. |
 | `git-credential <get\|store\|erase>` | Credential-helper protocol (called by git). |
-| `install [--host H] [--local\|--global]` | Configure git to use the helper. |
+| `install [--host H] [--local\|--global]` | Configure git + infer `gh` path. |
 | `uninstall [--host H] [--local\|--global]` | Remove the git configuration. |
 | `doctor [host]` | Print diagnostics. |
+
+## Tests
+
+```bash
+cargo test        # unit tests: config lookup/roundtrip, credential parsing
+```
 
 ## Notes & limitations
 
 - **SSH is out of scope.** `gh auth switch` only affects the HTTPS token `gh`
   vends as a credential helper; SSH remotes don't invoke credential helpers.
-  Use HTTPS remotes for autoswitching.
 - **Fail-safe.** Any error (missing config/mapping/`gh`) falls back to plain
   `gh auth git-credential`, so a misconfiguration never breaks git.
-- **No secrets stored.** The config holds only account *usernames*; tokens stay
-  in gh's own secure storage.
-- **Performance.** The helper runs on every remote op and reads gh's `hosts.yml`
-  offline; it only shells out to `gh auth switch` when the account must change.
-
-## Tests
-
-No real GitHub auth is touched — the suites use a mock `gh` on `PATH`.
-
-```bash
-bash test/run.sh                                   # bash helper (8 checks)
-```
-```powershell
-Invoke-Pester -Path test\gh-autoswitch.Tests.ps1   # PowerShell helper (Pester 5)
-```
+- **No secrets stored.** The config holds only account usernames and the `gh`
+  path; tokens stay in gh's own secure storage.
+- **Performance.** The helper reads gh's `hosts.yml` offline and only shells out
+  to `gh auth switch` when the account must actually change.
 
 ## License
 

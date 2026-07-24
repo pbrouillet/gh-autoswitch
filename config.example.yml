@@ -1,0 +1,27 @@
+# gh-autoswitch config (YAML)
+#
+# Copy to:
+#   Windows : %APPDATA%\gh-autoswitch\config.yml
+#   Linux/macOS : ${XDG_CONFIG_HOME:-~/.config}/gh-autoswitch/config.yml
+# or point $GH_AUTOSWITCH_CONFIG at it. Easiest: run `gh-autoswitch` (the TUI).
+
+# Path to the `gh` executable (the credential manager). Inferred automatically
+# on `gh-autoswitch install`, or press `g` in the TUI to detect it.
+gh_path: C:\Program Files\GitHub CLI\gh.exe
+
+# host/owner -> account mappings. An exact host+owner match wins over a
+# host + "*" wildcard (per-host default). No match => active account unchanged.
+mappings:
+  - host: github.com
+    owner: acme-corp
+    account: alice_work
+  - host: github.com
+    owner: alice
+    account: alice_personal
+  - host: github.com
+    owner: "*"
+    account: alice_personal
+  # GitHub Enterprise example:
+  # - host: ghe.corp.example.com
+  #   owner: "*"
+  #   account: alice_corp

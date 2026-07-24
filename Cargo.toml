@@ -1,0 +1,21 @@
+[package]
+name = "gh-autoswitch"
+version = "0.2.0"
+edition = "2021"
+description = "Auto-switch the active gh account before HTTPS git remote operations, with a Ratatui config editor."
+license = "MIT"
+
+[[bin]]
+name = "gh-autoswitch"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+ratatui = "0.30"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
