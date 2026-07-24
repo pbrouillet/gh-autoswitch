@@ -88,12 +88,15 @@ jobs:
           cp README.md LICENSE config.example.yml "$staging/" 2>/dev/null || true
 
           mkdir -p artifacts
+          artifacts_dir="$(pwd)/artifacts"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             archive="artifacts/${name}.zip"
-            (cd dist && 7z a -tzip "../${archive}" "${name}") >/dev/null
+            # Archive the folder contents (no wrapping directory).
+            (cd "$staging" && 7z a -tzip "${artifacts_dir}/${name}.zip" .) >/dev/null
           else
             archive="artifacts/${name}.tar.gz"
-            tar -czf "$archive" -C dist "${name}"
+            # Archive the folder contents (no wrapping directory).
+            tar -czf "$archive" -C "$staging" .
           fi
 
           # checksum
