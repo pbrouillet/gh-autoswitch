@@ -1,0 +1,8 @@
+# Shell scripts must use LF so they run under bash on all platforms.
+*.sh            text eol=lf
+bin/gh-autoswitch text eol=lf
+test/run.sh     text eol=lf
+
+# Windows-native scripts use CRLF.
+*.ps1           text eol=crlf
+*.cmd           text eol=crlf
