@@ -141,14 +141,17 @@ jobs:
     runs-on: windows-latest
     # Only for real tag releases, and only when a WINGET_TOKEN secret is
     # configured (a classic PAT with public_repo scope). Safe no-op otherwise.
+    # NB: the `secrets` context is not allowed in `if:`; map it to `env` first.
     if: github.ref_type == 'tag'
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
     steps:
       - name: Submit package update to winget-pkgs
-        if: ${{ secrets.WINGET_TOKEN != '' }}
+        if: ${{ env.WINGET_TOKEN != '' }}
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: pbrouillet.gh-autoswitch
           # Only the Windows portable zips are winget installers.
           installers-regex: '-pc-windows-msvc\.zip$'
-          token: ${{ secrets.WINGET_TOKEN }}
+          token: ${{ env.WINGET_TOKEN }}
 
