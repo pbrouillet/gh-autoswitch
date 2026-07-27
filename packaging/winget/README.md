@@ -30,8 +30,8 @@ Windows:
 ```powershell
 winget install Microsoft.WingetCreate
 wingetcreate new `
-  https://github.com/pbrouillet/gh-autoswitch/releases/download/v1.1.0/gh-autoswitch-v1.1.0-x86_64-pc-windows-msvc.zip `
-  https://github.com/pbrouillet/gh-autoswitch/releases/download/v1.1.0/gh-autoswitch-v1.1.0-aarch64-pc-windows-msvc.zip
+  https://github.com/pbrouillet/gh-autoswitch/releases/download/v1.1.1/gh-autoswitch-v1.1.1-x86_64-pc-windows-msvc.zip `
+  https://github.com/pbrouillet/gh-autoswitch/releases/download/v1.1.1/gh-autoswitch-v1.1.1-aarch64-pc-windows-msvc.zip
 ```
 
 When prompted, use:
@@ -42,13 +42,13 @@ When prompted, use:
 - Architectures **x64** and **arm64**
 
 Alternatively, the ready-made manifest set lives in this folder at
-[`manifests/p/pbrouillet/gh-autoswitch/1.1.0/`](./manifests/p/pbrouillet/gh-autoswitch/1.1.0/).
-Copy that `1.1.0` folder into your winget-pkgs fork under the same
+[`manifests/p/pbrouillet/gh-autoswitch/1.1.1/`](./manifests/p/pbrouillet/gh-autoswitch/1.1.1/).
+Copy that `1.1.1` folder into your winget-pkgs fork under the same
 `manifests/p/pbrouillet/gh-autoswitch/` path, validate, and open a PR:
 
 ```powershell
-winget validate --manifest .\packaging\winget\manifests\p\pbrouillet\gh-autoswitch\1.1.0\
-winget install --manifest .\packaging\winget\manifests\p\pbrouillet\gh-autoswitch\1.1.0\   # local test
+winget validate --manifest .\packaging\winget\manifests\p\pbrouillet\gh-autoswitch\1.1.1\
+winget install --manifest .\packaging\winget\manifests\p\pbrouillet\gh-autoswitch\1.1.1\   # local test
 ```
 
 > Keep the `InstallerSha256` values in sync with the release. They match the
