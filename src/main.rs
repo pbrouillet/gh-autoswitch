@@ -19,7 +19,7 @@ fn main() {
 
 fn run() -> Result<i32> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let cmd = args.first().map(|s| s.as_str()).unwrap_or("tui");
+    let cmd = args.first().map(|s| s.as_str()).unwrap_or("help");
 
     match cmd {
         "git-credential" => {
@@ -86,7 +86,7 @@ fn print_usage() {
         "gh-autoswitch — auto-switch gh account for git remote operations\n\
 \n\
 USAGE\n\
-  gh-autoswitch [tui]                              Launch the config editor (default)\n\
+  gh-autoswitch tui                                Launch the config editor\n\
   gh-autoswitch git-credential <get|store|erase>   Credential helper (called by git)\n\
   gh-autoswitch install   [--host H] [--local|--global]\n\
   gh-autoswitch uninstall [--host H] [--local|--global]\n\

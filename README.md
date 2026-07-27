@@ -79,14 +79,14 @@ This writes, for example:
 ```
 
 (The empty `helper =` clears any inherited helpers.) Put the binary on your
-`PATH` so you can just run `gh-autoswitch`.
+`PATH` so you can just run `gh-autoswitch` (with no arguments it prints help).
 
 ## Configure (TUI)
 
-Just run the binary with no arguments to open the editor:
+Run the `tui` subcommand to open the editor:
 
 ```bash
-gh-autoswitch          # or: gh-autoswitch tui
+gh-autoswitch tui
 ```
 
 - Table of `host / owner → account` mappings.
@@ -146,11 +146,12 @@ gh-autoswitch uninstall            # add --host / --local / --global to match
 
 | Command | Description |
 | --- | --- |
-| `tui` (default, no args) | Ratatui config editor. |
+| `tui` | Ratatui config editor. |
 | `git-credential <get\|store\|erase>` | Credential-helper protocol (called by git). |
 | `install [--host H] [--local\|--global]` | Configure git + infer `gh` path. |
 | `uninstall [--host H] [--local\|--global]` | Remove the git configuration. |
 | `doctor [host]` | Print diagnostics. |
+| `help` (default, no args) | Print usage. |
 
 ## Tests
 
