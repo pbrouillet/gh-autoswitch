@@ -1,0 +1,10 @@
+# Statically link the MSVC C runtime (vcruntime/ucrt) into the Windows binaries so
+# the portable executable has no external Visual C++ Redistributable dependency.
+# Without this, gh-autoswitch.exe fails to start on a clean machine with
+# STATUS_DLL_NOT_FOUND (0xC0000135). Only the Windows MSVC targets are affected;
+# Linux and macOS builds are unchanged.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
